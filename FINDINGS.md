@@ -1,11 +1,9 @@
-# Comparing `no-named-as-default` Rule: ESLint (import-x) vs OxLint
+# Comparing `no-named-as-default` Rule: ESLint (eslint-plugin-import) vs OxLint
 
 ## Setup
 
-- **ESLint**: v10.0.2 with `eslint-plugin-import-x` v4.16.1 (the ESLint 10-compatible fork of `eslint-plugin-import`)
+- **ESLint**: v9.39.3 with `eslint-plugin-import` v2.32.0 + `eslint-import-resolver-node` v0.3.9
 - **OxLint**: v1.50.0 with `--import-plugin` flag
-
-> Note: The original `eslint-plugin-import` v2.32.0 does not support ESLint 10 due to context API changes (`context.getFilename()` was removed). `eslint-plugin-import-x` is the maintained fork that supports ESLint 10's flat config.
 
 ## Test Modules
 
@@ -14,12 +12,12 @@
 | `basic.js` | `foo`, `bar` | `function main()` |
 | `default-only.js` | _(none)_ | `function main()` |
 | `named-only.js` | `foo`, `bar` | _(none)_ |
-| `same-as-default.js` | `foo` | `foo` (same value) |
-| `reexport-both.js` | `main` (re-exported) | `main` (same re-export) |
-| `reexport-different.js` | `foo` (re-exported from basic) | `default` (re-exported from basic) |
+| `same-as-default.js` | `foo` | `foo` (same value, but inline — not a re-export) |
+| `reexport-both.js` | `main` (re-exported) | `main` (same re-export from same source) |
+| `reexport-different.js` | `foo` (re-exported from basic) | `default` (re-exported from basic — different binding) |
 | `multiple-named.js` | `alpha`, `beta`, `gamma` | `class MyClass` |
 | `barrel.js` | `foo`, `bar`, `default` (all re-exported from basic) | yes (re-exported) |
-| `mixed-exports.js` | `localValue` (direct), `foo` (re-exported) | `class MixedDefault` |
+| `mixed-exports.js` | `localValue` (direct), `foo` (re-exported) | `class MixedDefault` (direct) |
 | `reexport-named-as-default.js` | `bar` (re-exported) | `foo` as default (re-exported) |
 | `ts-module.ts` | `Foo` (interface), `Bar` (type), `baz` (value) | `class MyClass` |
 | `self-import-module.js` | `myFunc` | `class SelfImport` |
@@ -36,8 +34,8 @@
 | 06 | `06-default-keyword.js` | `export { default } from basic.js` | ✅ OK | ✅ OK |
 | 07 | `07-both-default-and-named.js` | `import foo, { bar } from basic.js` | ✅ VIOLATION | ✅ VIOLATION |
 | 08 | `08-same-thing-default-named.js` | `import foo from same-as-default.js` | ✅ VIOLATION | ✅ VIOLATION |
-| 09 | `09-reexport-same-symbol.js` | `import main from reexport-both.js` | ✅ OK | ✅ OK |
-| **10** | `10-reexport-different-symbols.js` | `import foo from reexport-different.js` | ✅ **MISSED** | ✅ VIOLATION |
+| **09** | `09-reexport-same-symbol.js` | `import main from reexport-both.js` | ✅ OK (wrong reason) | ✅ OK (correct reason) |
+| **10** | `10-reexport-different-symbols.js` | `import foo from reexport-different.js` | ❌ **MISSED** | ✅ VIOLATION |
 | 11 | `11-multiple-named-exports.js` | `import alpha/beta/gamma from multiple-named.js` | ✅ VIOLATION (3x) | ✅ VIOLATION (3x) |
 | 12 | `12-namespace-import.js` | `import * as foo from basic.js` | ✅ OK | ✅ OK |
 | 13 | `13-nonexistent-module.js` | `import foo from does-not-exist.js` | ✅ OK | ✅ OK |
@@ -53,16 +51,52 @@
 | 23 | `23-only-bar-named.js` | `import bar from basic.js` | ✅ VIOLATION | ✅ VIOLATION |
 | 24 | `24-multiple-imports-same-module.js` | `import main; import foo from basic.js` | ✅ VIOLATION (foo) | ✅ VIOLATION (foo) |
 | 25 | `25-index-module.js` | `import foo from ./test-modules/` | ✅ OK | ✅ OK |
-| **26** | `26-barrel-reexport.js` | `import foo from barrel.js` | ✅ **MISSED** | ✅ VIOLATION |
-| **27** | `27-mixed-exports.js` | `import foo; import localValue from mixed-exports.js` | ⚠️ PARTIAL (localValue only) | ✅ VIOLATION (both) |
-| **28** | `28-reexport-named-as-default.js` | `import bar from reexport-named-as-default.js` | ✅ **MISSED** | ✅ VIOLATION |
+| **26** | `26-barrel-reexport.js` | `import foo from barrel.js` | ❌ **MISSED** | ✅ VIOLATION |
+| **27** | `27-mixed-exports.js` | `import foo; import localValue from mixed-exports.js` | ⚠️ PARTIAL (both flagged) | ✅ VIOLATION (both) |
+| **28** | `28-reexport-named-as-default.js` | `import bar from reexport-named-as-default.js` | ❌ **MISSED** | ✅ VIOLATION |
+| 29 | `29-type-import-no-violation.ts` | `import type MyClass from ts-module.js` | ✅ OK | ✅ OK |
 | **30** | `30-no-default-multiple-named.js` | `import foo; import bar from named-only.js` | ✅ OK | ❌ **VIOLATION** (2x) |
 
 ## Key Differences Found
 
-### Difference 1: Module with No Default Export
+### Difference 1: Re-exported Named Exports — The `getImport().local` Bug
 
-**Scenario 05, 30**: When importing a "default" from a module that has no default export at all.
+**Scenarios 10, 26, 28** — when both the named export AND the default export are re-exports.
+
+```js
+// reexport-different.js
+export { foo } from './basic.js';     // re-export named 'foo'
+export { default } from './basic.js'; // re-export default (different binding!)
+
+import foo from './reexport-different.js'; // foo is confusingly the same name as a named export
+```
+
+- **ESLint**: **MISSES it**. The rule has a "same symbol" escape hatch: if both the named and default exports are in the `reexports` Map, it calls `getImport()` on each and compares `.path` and `.local`. The bug is that `getImport().local` returns **`undefined`** for all re-exported symbols (it's not populated by the ExportMap builder). So `undefined === undefined` is always `true`, and the escape hatch fires for ALL pairs of re-exports — even when they're actually different symbols. This means ESLint never flags violations when both named and default exports come from re-export syntax.
+
+- **OxLint**: **Correctly flags**. Uses `indirect_export_entries` from the module record and compares the actual `ExportImportName` strings (`'foo'` vs `'default'`), not the unset `local` property. Correctly identifies these as different symbols.
+
+This is `eslint-plugin-import`'s most significant gap. The `FIXME` comment in the rule source even acknowledges problems with the ExportMap for this case.
+
+### Difference 2: Mixed Direct + Re-exported Exports
+
+**Scenario 27** — when a module mixes directly-defined exports with re-exports.
+
+```js
+// mixed-exports.js
+export const localValue = 42;          // direct named export
+export { foo } from './basic.js';      // re-exported named export
+export default class MixedDefault {}  // direct default export
+```
+
+- **ESLint**: Flags **both** `localValue` and `foo`. For `foo`: it's in `reexports`, but `default` is NOT in `reexports` (it's direct), so the escape hatch block never runs — falls through to report. This is actually correct behavior, but only works because the default is direct.
+
+- **OxLint**: Flags **both**. Same result for the right reason.
+
+Both linters agree here, but ESLint's correct behavior is accidental — it only works because the default isn't a re-export. If the default were also a re-export (see Scenarios 10/26/28), ESLint would miss it.
+
+### Difference 3: Module with No Default Export
+
+**Scenarios 05, 30**: When importing a "default" from a module that has no default export at all.
 
 ```js
 // named-only.js
@@ -75,29 +109,10 @@ export const bar = 2;
 import foo from './named-only.js'; // foo IS a named export, but no default exists
 ```
 
-- **ESLint**: Skips. The rule explicitly checks `if (!importedModule.hasDefault) { return; }` — it reasons that if a module has no default export, the code is already wrong for other reasons.
-- **OxLint**: **Reports a violation** — it doesn't check whether a default export exists before flagging.
+- **ESLint**: Skips. Checks `importedModule.hasDefault` first; if no default, the code is already broken for other reasons → skip.
+- **OxLint**: **Reports a violation** — doesn't check whether a default export exists before flagging.
 
-### Difference 2: Re-exported Named Exports (Barrel Files)
-
-**Scenarios 10, 26, 27, 28**: When a module re-exports named exports using `export { ... } from '...'` syntax.
-
-```js
-// reexport-different.js
-export { foo } from './basic.js';     // re-export named
-export { default } from './basic.js'; // re-export default
-```
-
-```js
-import foo from './reexport-different.js'; // foo IS a re-exported named export
-```
-
-- **ESLint (import-x)**: **Misses it**. The ExportMap stores re-exported symbols in the `reexports` Map, but the `no-named-as-default` rule checks `exportMap.exports.has(name)`. The `exports` Map only contains directly-defined exports (from `namespace`), not re-exports. This is a significant blind spot for barrel files.
-- **OxLint**: **Correctly flags it** — OxLint resolves re-exports and checks all exported names regardless of whether they're direct or re-exported.
-
-This is probably the most impactful difference since barrel files (`index.js` files that re-export everything) are extremely common in large codebases.
-
-### Difference 3: TypeScript `import type` Statements
+### Difference 4: TypeScript `import type` Statements
 
 **Scenario 18**: Type-only default imports in TypeScript.
 
@@ -105,19 +120,16 @@ This is probably the most impactful difference since barrel files (`index.js` fi
 import type foo from './basic.js'; // foo is a named export of basic.js
 ```
 
-- **ESLint**: **Skips entirely**. ESLint (without a TypeScript parser) doesn't parse `import type` as an `ImportDefaultSpecifier` node — the `import type` syntax causes the rule visitor not to fire.
-- **OxLint**: **Reports a violation** — OxLint parses TypeScript natively and treats `import type X from ...` the same as `import X from ...` for this rule.
+- **ESLint**: Skips entirely. The `import type` statement is not parsed as an `ImportDefaultSpecifier` node by espree; the rule visitor never fires.
+- **OxLint**: **Reports a violation** — treats `import type X from ...` identically to `import X from ...` for this rule.
 
-The question of whether type-only imports should be flagged is debatable: since `import type` only imports the type (erased at runtime), it might be considered harmless to name it the same as a named export. ESLint's behavior (not flagging) could be seen as more permissive and developer-friendly.
+### Difference 5: TypeScript Type/Interface Named Exports
 
-### Difference 4: TypeScript Type Exports (Interfaces) Treated as Named Exports
-
-**Scenario 19**: When a module has TypeScript interface/type exports, and a default import uses the same name.
+**Scenario 19**: A module with TypeScript interface exports.
 
 ```ts
 // ts-module.ts
 export interface Foo { bar: string; }
-export type Bar = string;
 export const baz = 42;
 export default class MyClass {}
 ```
@@ -126,32 +138,35 @@ export default class MyClass {}
 import Foo from './ts-module.js'; // Foo is a TypeScript interface export
 ```
 
-- **ESLint**: **Skips**. ESLint can't resolve `ts-module.js` to `ts-module.ts` (Node resolver with `.js` explicit extension doesn't try `.ts`). Even if it could, it may not parse TypeScript syntax without `@typescript-eslint/parser`.
-- **OxLint**: **Flags both `Foo` (interface) and `baz` (value)** — OxLint uses TypeScript-aware module resolution, resolves `.js` imports to `.ts` files, and correctly identifies both type and value named exports.
+- **ESLint**: Skips. Cannot resolve `ts-module.js` → `ts-module.ts` without TypeScript resolver config. Even with TS support, may not distinguish type vs. value exports.
+- **OxLint**: **Flags both `Foo` (interface) and `baz` (value)** — uses TypeScript-aware module resolution, resolves `.js` to `.ts`, and finds all named exports including type-only ones.
 
-## Same Behavior in Both
+### Scenario 09: Same Symbol — Both Happen to Skip (Different Reasons)
 
-- **Direct named export + default**: Both flag correctly (Scenarios 01, 07, 11, 23)
-- **Re-export of same symbol as both named and default**: Neither flags (Scenario 09 — `reexport-both.js` exports `main` as both named and default via same re-export path)
-- **Namespace imports (`import * as foo`)**: Neither flags (Scenario 12)
-- **Non-existent modules**: Neither flags (Scenario 13 — resolve fails, both skip)
-- **Node.js built-ins and npm packages**: Neither flags (Scenarios 14, 15)
-- **Dynamic imports**: Neither flags (Scenario 20)
-- **`export { foo as default }` (re-exporting as default)**: Neither flags (Scenario 16 — exported name is `default`, which is explicitly excluded by both rules)
-- **`export const foo = 1; export default foo;` (same value, different mechanism)**: Both flag (Scenario 08 — they can't determine values are equal without re-export analysis)
-- **Self-imports**: Both flag (Scenario 21)
-- **Multiple imports from same module**: Both flag only the violating one (Scenario 24)
+```js
+// reexport-both.js
+export { main as default, main } from './default-only.js';
+
+import main from './reexport-both.js'; // main = same symbol exported as both named and default
+```
+
+- **ESLint**: Skips, but for the wrong reason: `hasDefault` is `false` in the ExportMap (the ExportMap doesn't count a re-exported `default` as `hasDefault`), so the rule returns early before even checking the escape hatch.
+- **OxLint**: Skips for the correct reason: `default_and_named_are_same_reexport()` detects both exports come from the same source module with the same binding name.
+
+Both produce the right result (no violation), but ESLint reaches it via a bug.
 
 ## Summary
 
-OxLint is **stricter** than ESLint's import-x plugin. It catches more violations:
+OxLint is **stricter** than `eslint-plugin-import`. It catches more violations and uses correct logic for re-export analysis:
 
 | Category | ESLint catches | OxLint catches |
 |----------|---------------|----------------|
 | Direct named + default exports | ✅ | ✅ |
-| Re-exported named exports (barrel files) | ❌ | ✅ |
-| Modules without default exports | ❌ (skips) | ✅ (flags) |
+| Mixed: direct default + re-exported named | ✅ | ✅ |
+| Re-exported named + re-exported default (different symbols) | ❌ (bug: `local === undefined`) | ✅ |
+| Modules without default exports | ❌ (intentional skip) | ✅ |
 | TypeScript `import type` | ❌ | ✅ |
 | TypeScript interface/type named exports | ❌ | ✅ |
+| Same symbol exported as named + default | ✅ (correct skip) | ✅ (correct skip) |
 
-The most significant practical difference is **re-exported exports in barrel files** — ESLint misses violations when the target module uses `export { foo } from '...'` syntax, while OxLint catches them correctly. This could lead to different lint behavior when migrating from ESLint to OxLint in codebases that heavily use barrel files.
+The most impactful practical difference is the **re-export bug**: `eslint-plugin-import` never flags violations when both the named and the default are re-exported (via `export { x } from '...'`). Since `getImport().local` is always `undefined` for re-exports, the "same symbol" equality check always fires, suppressing all such violations. This is a significant gap for codebases using barrel/index files where everything is re-exported.

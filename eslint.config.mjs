@@ -1,16 +1,18 @@
-import importX from 'eslint-plugin-import-x';
+import importPlugin from 'eslint-plugin-import';
 
 export default [
   {
     plugins: {
-      'import-x': importX,
+      import: importPlugin,
     },
     rules: {
-      'import-x/no-named-as-default': 'error',
+      'import/no-named-as-default': 'error',
     },
     settings: {
-      'import-x/resolver': {
-        node: true,
+      'import/resolver': {
+        node: {
+          extensions: ['.js', '.ts'],
+        },
       },
     },
   },
