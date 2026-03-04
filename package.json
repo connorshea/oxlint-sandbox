@@ -12,6 +12,9 @@
   "packageManager": "pnpm@10.30.2",
   "devDependencies": {
     "eslint": "^10.0.2",
+    "eslint-import-resolver-node": "^0.3.9",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-import-x": "^4.16.1",
     "oxlint": "^1.50.0"
   }
 }
