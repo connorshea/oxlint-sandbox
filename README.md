@@ -2,7 +2,7 @@
 
 A sandbox for testing the `regexp/sort-flags` rule in ESLint and Oxlint.
 
-The `test.js` file contains a regex with unsorted flags (`/\w/yvsimg`), which should be sorted to `/\w/gimsvy`.
+The `test.js` file contains a regex with unsorted flags (`/\w/yvsimg`), which should be caught as a violation.
 
 ## Setup
 
@@ -18,28 +18,14 @@ Lint (detect the issue):
 npx eslint test.js
 ```
 
-Fix (auto-sort the flags):
-
-```sh
-npx eslint --fix test.js
-```
-
-The ESLint fixer correctly sorts the regex flags.
+The ESLint run correctly identifies the violation from `regexp/sort-flags`.
 
 ## Running Oxlint
 
-Oxlint does not have a native `regexp/sort-flags` rule, so the config uses `jsPlugins` to load `eslint-plugin-regexp`.
-
-Lint:
+Oxlint is set up to run `regexp/sort-flags`, and should also detect the violation, but it does not. Run the linter:
 
 ```sh
-npx oxlint -c .oxlintrc.json test.js
+pnpm oxlint
 ```
 
-Fix:
-
-```sh
-npx oxlint -c .oxlintrc.json --fix test.js
-```
-
-**Note:** As of oxlint v1.56.0, the `jsPlugins` feature is in alpha. The `regexp/sort-flags` rule loads but does not detect the unsorted flags or apply a fix. The ESLint fixer works correctly.
+See there are 0 violations, which is incorrect. There is some bug in the JS Plugins system that causes the `sort-flags` rule to not work correctly in this case.
