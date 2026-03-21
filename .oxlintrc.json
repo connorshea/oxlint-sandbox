@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["eslint-plugin-regexp"],
+  "rules": {
+    "regexp/sort-flags": "error"
+  }
+}
