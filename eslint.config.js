@@ -1,9 +1,7 @@
-import js from "@eslint/js";
 import babelPlugin from "@babel/eslint-plugin";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default [
-  js.configs.recommended,
   {
     plugins: {
       "@babel": babelPlugin,
