@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["eslint-plugin-testing-library"],
+  "rules": {
+    "testing-library/prefer-screen-queries": "error",
+    "testing-library/no-debugging-utils": "error",
+    "testing-library/await-async-utils": "error",
+    "testing-library/no-await-sync-queries": "error",
+    "testing-library/no-container": "error",
+    "testing-library/no-node-access": "error",
+    "testing-library/no-wait-for-multiple-assertions": "error",
+    "testing-library/no-wait-for-side-effects": "error",
+    "testing-library/no-wait-for-snapshot": "error",
+    "testing-library/render-result-naming-convention": "error"
+  }
+}
