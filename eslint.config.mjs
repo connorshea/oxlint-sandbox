@@ -1,17 +1,25 @@
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default [
   {
-    ignores: ['node_modules/**', 'dist/**'],
-  },
-  {
-    files: ['**/*.ts', '**/*.tsx'],
-    extends: [...tseslint.configs.recommendedTypeChecked],
+    files: ['**/*.ts'],
+    plugins: { '@typescript-eslint': tseslint.plugin },
     languageOptions: {
+      parser: tseslint.parser,
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          allowForKnownSafePromises: [
+            { from: 'file', name: 'MyPromise' },
+          ],
+        },
+      ],
+    },
   },
-);
+];

@@ -1,9 +1,17 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc"],
-  "categories": {
-    "correctness": "error",
-    "suspicious": "warn"
+  "options": {
+    "typeAware": true
   },
-  "ignorePatterns": ["node_modules", "dist"]
+  "plugins": ["typescript"],
+  "rules": {
+    "typescript/no-floating-promises": [
+      "error",
+      {
+        "allowForKnownSafePromises": [
+          { "from": "file", "name": "MyPromise" }
+        ]
+      }
+    ]
+  }
 }
