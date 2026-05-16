@@ -1,10 +1,11 @@
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default [
   {
     files: ['**/*.ts'],
-    extends: [...tseslint.configs.recommendedTypeChecked],
+    plugins: { '@typescript-eslint': tseslint.plugin },
     languageOptions: {
+      parser: tseslint.parser,
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
@@ -21,4 +22,4 @@ export default tseslint.config(
       ],
     },
   },
-);
+];
